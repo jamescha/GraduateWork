@@ -4,7 +4,6 @@ import slickdevlabs.apps.usb2seriallib.AdapterConnectionListener;
 import slickdevlabs.apps.usb2seriallib.SlickUSB2Serial;
 import slickdevlabs.apps.usb2seriallib.USB2SerialAdapter;
 import android.app.Activity;
-import android.content.Intent;
 import android.graphics.Color;
 import android.graphics.Paint;
 import android.os.Bundle;
@@ -34,6 +33,8 @@ OnClickListener,AdapterConnectionListener, USB2SerialAdapter.DataListener, OnIte
 	//XYPlot Set up
 	private XYPlot plot = null;
     private SimpleXYSeries datalineMSP = null;
+    private SimpleXYSeries datalineSen = null;
+    private SimpleXYSeries datalineHum = null;
     private LineAndPointFormatter datalineFormat;
     
     //Buttons
@@ -41,7 +42,11 @@ OnClickListener,AdapterConnectionListener, USB2SerialAdapter.DataListener, OnIte
     private Button externalTempButton;
     private Button humidityButton;
     
-   
+    //Toggle Tracker
+    private Boolean onBoardTempBool = true;
+    private Boolean externalTempBool = false;
+    private Boolean humidityBool = false;
+    
 	
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -49,15 +54,18 @@ OnClickListener,AdapterConnectionListener, USB2SerialAdapter.DataListener, OnIte
         Log.d(TAG, "onCreate Started");
         setContentView(R.layout.activity_main);
         
-        final Intent humidityIntent = new Intent(this, HumidityActivity.class);
-        final Intent externalIntent = new Intent(this, ExternalTempActivity.class);
-        
         datalineFormat = new LineAndPointFormatter();
         datalineFormat.setPointLabelFormatter(new PointLabelFormatter());
         datalineFormat.configure(getApplicationContext(), R.xml.line_point_formater);
         
         datalineMSP = new SimpleXYSeries("OnBoard Temperature");
         datalineMSP.useImplicitXVals();
+        
+        datalineSen = new SimpleXYSeries("Sensor Temperature");
+        datalineSen.useImplicitXVals();
+        
+        datalineHum = new SimpleXYSeries("Humidity");
+        datalineHum.useImplicitXVals();
         
         
         plot = (XYPlot) findViewById(R.id.XYPlot);
@@ -76,6 +84,14 @@ OnClickListener,AdapterConnectionListener, USB2SerialAdapter.DataListener, OnIte
         																 new Double(Math.random()*255).intValue(),
         																 new Double(Math.random()*255).intValue(), 
         																 new Double(Math.random()*255).intValue()), Color.BLACK, null, null));
+        plot.addSeries(datalineSen,  new LineAndPointFormatter(Color.rgb(
+        		 														 new Double(Math.random()*255).intValue(),
+        		 														 new Double(Math.random()*255).intValue(), 
+        		 														 new Double(Math.random()*255).intValue()), Color.BLACK, null, null));
+        plot.addSeries(datalineHum,  new LineAndPointFormatter(Color.rgb(
+        		 														 new Double(Math.random()*255).intValue(), 
+        		 														 new Double(Math.random()*255).intValue(), 
+        		 														 new Double(Math.random()*255).intValue()), Color.BLACK, null, null));
         plot.setPadding(0, 0, 0, 0);
         plot.setPlotMargins(0, 0, 0, 0);
         //plot.setPlotMarginBottom(20);
@@ -103,6 +119,7 @@ OnClickListener,AdapterConnectionListener, USB2SerialAdapter.DataListener, OnIte
 			
 			@Override
 			public void onClick(View v) {
+				onBoardTempBool = !onBoardTempBool;
 				
 			}
 		});
@@ -112,7 +129,8 @@ OnClickListener,AdapterConnectionListener, USB2SerialAdapter.DataListener, OnIte
 			
 			@Override
 			public void onClick(View v) {
-				startActivity(externalIntent);
+				externalTempBool = !externalTempBool;
+				
 			}
 		});
         
@@ -121,7 +139,8 @@ OnClickListener,AdapterConnectionListener, USB2SerialAdapter.DataListener, OnIte
 			
 			@Override
 			public void onClick(View v) {
-				startActivity(humidityIntent);
+				humidityBool = !humidityBool;
+				
 			}
 		});
         
@@ -158,37 +177,70 @@ OnClickListener,AdapterConnectionListener, USB2SerialAdapter.DataListener, OnIte
 		final Integer length = newTextArray.length;
 		
 		Integer countMSP = 0;
+		Integer countSen = 0;
+		Integer countHum = 0;
 		Integer sumMSP = 0;
+		Integer sumHum = 0;
+		Integer sumSen = 0;
 		Double averageMSP = 0.0;
+		Double averageHum = 0.0;
+		Double averageSen = 0.0;
 		Double temperatureMSP = 0.0;
+		Double temperatureSen = 0.0;
+		Double humidity = 0.0;
 		
 		
 		if (length == 42) {
 			for(Integer i = 0; i<20; i+=2) {
-				if (Integer.parseInt((newTextArray[18+i] + newTextArray[19+i]),16) > 1500&& //MSP430 
+				if(Integer.parseInt((newTextArray[18+i] + newTextArray[19+i]),16) < 1500 ) { //Humidity
+					sumHum += Integer.parseInt((newTextArray[18+i] + newTextArray[19+i]),16);
+					countHum++;
+				}
+				else if (Integer.parseInt((newTextArray[18+i] + newTextArray[19+i]),16) > 1500&& //MSP430 
 						 Integer.parseInt((newTextArray[18+i] + newTextArray[19+i]),16) < 3500 ) {
 					sumMSP += Integer.parseInt((newTextArray[18+i] + newTextArray[19+i]),16);
 					countMSP++;
 				}
+				else if (Integer.parseInt((newTextArray[18+i] + newTextArray[19+i]),16) > 5500) { //Sensirian
+					sumSen += Integer.parseInt((newTextArray[18+i] + newTextArray[19+i]),16);
+					countSen++;
+				}
 			}
 			
 			averageMSP = sumMSP/(countMSP * 1.0);
+			averageSen = sumSen/(countSen * 1.0);
+			averageHum = sumHum/(countHum * 1.0);
 			
 			temperatureMSP = ((((((averageMSP / 4096.0) * 1.5) - 0.986) / 0.00355) * 9.0) / 5.0) + 32.0;
+			temperatureSen = (((-38.4 + (averageSen * 0.0098)) * 9.0) / 5.0) + 32.0;
+			humidity = (-0.0000028 * averageHum * averageHum) + (0.0405 * averageHum - 4) ;
 			
 			
 			Log.d("MSPTEMPERATURE", temperatureMSP.toString());
+			Log.d("SENTEMPERATURE", temperatureSen.toString());
+			Log.d("HUMIDITY", humidity.toString());
 		}
 		Log.d("LENGTH", length.toString());
 		final Double tempMSP = temperatureMSP;
+		final Double tempSen = temperatureSen;
+		final Double tempHum = humidity;
 		runOnUiThread(new Runnable(){
 			@Override
 			public void run() {
 				if(datalineMSP.size()>30)
 					datalineMSP.removeFirst();
+				if (datalineSen.size()>30)
+					datalineSen.removeFirst();
+				if (datalineHum.size()>30)
+					datalineHum.removeFirst();
 				if(length == 42)
 				{
-					datalineMSP.addLast(null, tempMSP);
+					if(onBoardTempBool)
+						datalineMSP.addLast(null, tempMSP);
+					if(externalTempBool)
+						datalineSen.addLast(null, tempSen);
+					if(humidityBool)
+						datalineHum.addLast(null, tempHum);
 					plot.redraw();
 				}
 			}
