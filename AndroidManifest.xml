@@ -19,12 +19,17 @@
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
-                
             </intent-filter>
             
             <intent-filter>
                 <action android:name="android.hardware.usb.action.USB_DEVICE_ATTACHED"/>
             </intent-filter>
+        </activity>
+        
+        <activity
+            android:name="com.csuf.graduateproject.ExternalTempActivity"
+            android:label="@string/app_name"
+            android:parentActivityName="com.csuf.graduateproject.MainActivity" >
         </activity>
     </application>
 

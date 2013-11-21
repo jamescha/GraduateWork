@@ -26,14 +26,15 @@ import com.androidplot.xy.PointLabelFormatter;
 import com.androidplot.xy.SimpleXYSeries;
 import com.androidplot.xy.XYPlot;
 
-public class MainActivity extends Activity implements 
+public class ExternalTempActivity extends Activity implements 
 OnClickListener,AdapterConnectionListener, USB2SerialAdapter.DataListener, OnItemSelectedListener {
 
-	private static final String TAG = "MainActivity";
+	private static final String TAG = "ExternalTempActivity";
 	
+	private USB2SerialAdapter ad;
 	//XYPlot Set up
 	private XYPlot plot = null;
-    private SimpleXYSeries datalineMSP = null;
+    private SimpleXYSeries datalineSen = null;
     private LineAndPointFormatter datalineFormat;
     
     //Buttons
@@ -41,7 +42,7 @@ OnClickListener,AdapterConnectionListener, USB2SerialAdapter.DataListener, OnIte
     private Button externalTempButton;
     private Button humidityButton;
     
-   
+    
 	
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -49,16 +50,16 @@ OnClickListener,AdapterConnectionListener, USB2SerialAdapter.DataListener, OnIte
         Log.d(TAG, "onCreate Started");
         setContentView(R.layout.activity_main);
         
-        final Intent humidityIntent = new Intent(this, HumidityActivity.class);
-        final Intent externalIntent = new Intent(this, ExternalTempActivity.class);
+       
+        final Intent mainIntent = new Intent(this, MainActivity.class);
+        final Intent humidityIntent = new Intent(this, HumidityActivity.class);        
         
         datalineFormat = new LineAndPointFormatter();
         datalineFormat.setPointLabelFormatter(new PointLabelFormatter());
         datalineFormat.configure(getApplicationContext(), R.xml.line_point_formater);
         
-        datalineMSP = new SimpleXYSeries("OnBoard Temperature");
-        datalineMSP.useImplicitXVals();
-        
+        datalineSen = new SimpleXYSeries("Sensor Temperature");
+        datalineSen.useImplicitXVals();
         
         plot = (XYPlot) findViewById(R.id.XYPlot);
         plot.setBorderStyle(Plot.BorderStyle.NONE, null, null);
@@ -72,14 +73,13 @@ OnClickListener,AdapterConnectionListener, USB2SerialAdapter.DataListener, OnIte
         plot.getGraphWidget().getGridBackgroundPaint().setColor(Color.TRANSPARENT);
         plot.getBackgroundPaint().setColor(Color.TRANSPARENT);
         plot.getGraphWidget().getBackgroundPaint().setColor(Color.TRANSPARENT);
-        plot.addSeries(datalineMSP,  new LineAndPointFormatter(Color.rgb( 
-        																 new Double(Math.random()*255).intValue(),
-        																 new Double(Math.random()*255).intValue(), 
-        																 new Double(Math.random()*255).intValue()), Color.BLACK, null, null));
+        
+        plot.addSeries(datalineSen,  new LineAndPointFormatter(Color.rgb(
+        		 														 new Double(Math.random()*255).intValue(),
+        		 														 new Double(Math.random()*255).intValue(), 
+        		 														 new Double(Math.random()*255).intValue()), Color.BLACK, null, null));
         plot.setPadding(0, 0, 0, 0);
         plot.setPlotMargins(0, 0, 0, 0);
-        //plot.setPlotMarginBottom(20);
-        //plot.setPlotMarginRight(10);
         plot.setDomainStepValue(5);
         plot.setTicksPerRangeLabel(3);
         plot.setDomainLabel("Duration");
@@ -96,14 +96,14 @@ OnClickListener,AdapterConnectionListener, USB2SerialAdapter.DataListener, OnIte
         plot.getLegendWidget().setSize(new SizeMetrics(25, SizeLayoutType.ABSOLUTE, 400, SizeLayoutType.ABSOLUTE));
         
         SlickUSB2Serial.initialize(this);
-        SlickUSB2Serial.autoConnect(MainActivity.this);
+        SlickUSB2Serial.autoConnect(ExternalTempActivity.this);
         
         onBoardTempButton =  (Button) findViewById(R.id.onboard);
         onBoardTempButton.setOnClickListener(new OnClickListener() {
 			
 			@Override
 			public void onClick(View v) {
-				
+				startActivity(mainIntent);
 			}
 		});
         
@@ -112,7 +112,11 @@ OnClickListener,AdapterConnectionListener, USB2SerialAdapter.DataListener, OnIte
 			
 			@Override
 			public void onClick(View v) {
-				startActivity(externalIntent);
+				
+				ad.setCommSettings(SlickUSB2Serial.BaudRate.BAUD_115200, 
+						   SlickUSB2Serial.DataBits.DATA_8_BIT, 
+						   SlickUSB2Serial.ParityOption.PARITY_NONE,
+						   SlickUSB2Serial.StopBits.STOP_1_BIT);
 			}
 		});
         
@@ -122,6 +126,7 @@ OnClickListener,AdapterConnectionListener, USB2SerialAdapter.DataListener, OnIte
 			@Override
 			public void onClick(View v) {
 				startActivity(humidityIntent);
+				
 			}
 		});
         
@@ -157,38 +162,37 @@ OnClickListener,AdapterConnectionListener, USB2SerialAdapter.DataListener, OnIte
 		final String[] newTextArray = newText.split(" ", -1);
 		final Integer length = newTextArray.length;
 		
-		Integer countMSP = 0;
-		Integer sumMSP = 0;
-		Double averageMSP = 0.0;
-		Double temperatureMSP = 0.0;
+		Integer countSen = 0;
+		Integer sumSen = 0;
+		Double averageSen = 0.0;
+		Double temperatureSen = 0.0;
 		
 		
 		if (length == 42) {
 			for(Integer i = 0; i<20; i+=2) {
-				if (Integer.parseInt((newTextArray[18+i] + newTextArray[19+i]),16) > 1500&& //MSP430 
-						 Integer.parseInt((newTextArray[18+i] + newTextArray[19+i]),16) < 3500 ) {
-					sumMSP += Integer.parseInt((newTextArray[18+i] + newTextArray[19+i]),16);
-					countMSP++;
+				if (Integer.parseInt((newTextArray[18+i] + newTextArray[19+i]),16) > 5500) { //Sensirian
+					sumSen += Integer.parseInt((newTextArray[18+i] + newTextArray[19+i]),16);
+					countSen++;
 				}
 			}
 			
-			averageMSP = sumMSP/(countMSP * 1.0);
+			averageSen = sumSen/(countSen * 1.0);
 			
-			temperatureMSP = ((((((averageMSP / 4096.0) * 1.5) - 0.986) / 0.00355) * 9.0) / 5.0) + 32.0;
+			temperatureSen = (((-38.4 + (averageSen * 0.0098)) * 9.0) / 5.0) + 32.0;
 			
 			
-			Log.d("MSPTEMPERATURE", temperatureMSP.toString());
+			Log.d("SENTEMPERATURE", temperatureSen.toString());
 		}
 		Log.d("LENGTH", length.toString());
-		final Double tempMSP = temperatureMSP;
+		final Double tempSen = temperatureSen;
 		runOnUiThread(new Runnable(){
 			@Override
 			public void run() {
-				if(datalineMSP.size()>30)
-					datalineMSP.removeFirst();
+				if (datalineSen.size()>30)
+					datalineSen.removeFirst();
 				if(length == 42)
 				{
-					datalineMSP.addLast(null, tempMSP);
+					datalineSen.addLast(null, tempSen);
 					plot.redraw();
 				}
 			}
@@ -202,12 +206,13 @@ OnClickListener,AdapterConnectionListener, USB2SerialAdapter.DataListener, OnIte
 				   SlickUSB2Serial.DataBits.DATA_8_BIT, 
 				   SlickUSB2Serial.ParityOption.PARITY_NONE,
 				   SlickUSB2Serial.StopBits.STOP_1_BIT);
-		Toast.makeText(MainActivity.this, "Adapter "+adapter.getDeviceId()+" Connected!", Toast.LENGTH_SHORT).show();
+		ad=adapter;
+		Toast.makeText(ExternalTempActivity.this, "Adapter "+adapter.getDeviceId()+" Connected!", Toast.LENGTH_SHORT).show();
 	}
 
 	@Override
 	public void onAdapterConnectionError(int arg0, String arg1) {
-		Toast.makeText(MainActivity.this, R.string.connection_error, Toast.LENGTH_SHORT).show();
+		Toast.makeText(ExternalTempActivity.this, R.string.connection_error, Toast.LENGTH_SHORT).show();
 	}
 
 	@Override
